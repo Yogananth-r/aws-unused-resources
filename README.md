@@ -1,268 +1,139 @@
 # AWS Unused Resources Finder
 
-A read-only Python CLI tool that scans an AWS account for potentially unused resources and generates an Excel report.
+A read-only AWS CLI tool that scans an AWS account for potentially unused resources and generates an Excel report.
 
-The tool runs multiple AWS resource collectors in parallel and identifies resources such as stopped EC2 instances, unattached EBS volumes, unassociated Elastic IPs, unused AMIs, stopped RDS instances, unused Load Balancers, inactive EFS file systems, and empty S3 buckets.
+It checks EC2, EBS, Elastic IPs, AMIs, RDS, Load Balancers, EFS, and S3. The tool only reads AWS resources and never modifies or deletes them.
 
-## Features
+## Installation in AWS CloudShell
 
-* Read-only AWS resource scanning
-* Parallel resource collectors
-* AWS account and region detection
-* Single-service scanning
-* Configurable worker count
-* Excel report generation
-* Risk classification
-* Consolidated findings sheet
-* Service-specific Excel sheets
-* No resource deletion or modification
-
-## Resources Detected
-
-| Service       | Detection                                   |
-| ------------- | ------------------------------------------- |
-| EC2           | Stopped instances                           |
-| EBS           | Unattached volumes                          |
-| Elastic IP    | Unassociated Elastic IPs                    |
-| AMI           | Unreferenced account-owned AMIs             |
-| RDS           | Stopped DB instances                        |
-| Load Balancer | ALB/NLB with no registered targets          |
-| EFS           | No client connections over the last 30 days |
-| S3            | Empty buckets                               |
-
-## Architecture
-
-```text
-                         AWS Account
-                              |
-                              v
-                       +--------------+
-                       |  AWSSession  |
-                       +------+-------+
-                              |
-                    ThreadPoolExecutor
-                              |
-          +---------+---------+---------+---------+
-          |         |         |         |         |
-         EC2       EBS       AMI       RDS       EFS
-          |         |         |         |         |
-         EIP       S3       ELBv2       |         |
-          |         |         |         |         |
-          +---------+---------+---------+---------+
-                              |
-                              v
-                     FindingsAnalyzer
-                              |
-                              v
-                      ExcelExporter
-                              |
-                              v
-                  unused_resources.xlsx
-```
-
-## Project Structure
-
-```text
-aws-unused-resources/
-│
-├── cli.py
-├── requirements.txt
-├── README.md
-├── .gitignore
-│
-├── collectors/
-│   ├── __init__.py
-│   ├── ec2.py
-│   ├── ebs.py
-│   ├── elastic_ip.py
-│   ├── ami.py
-│   ├── rds.py
-│   ├── elbv2.py
-│   ├── efs.py
-│   └── s3.py
-│
-├── analyzer/
-│   ├── __init__.py
-│   └── findings.py
-│
-├── exporter/
-│   ├── __init__.py
-│   └── excel.py
-│
-└── utils/
-    ├── __init__.py
-    └── aws_session.py
-```
-
-## Requirements
-
-* Python 3.10+
-* AWS account
-* AWS credentials configured locally
-* Read-only permissions for the services being scanned
-
-## Installation
-
-Clone the repository:
+### Clone the Repository
 
 ```bash
-git clone <tbd>
+git clone https://github.com/Yogananth-r/aws-unused-resources
 cd aws-unused-resources
 ```
 
-Install dependencies:
+### Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## AWS Credentials
-
-The tool uses the standard Boto3 credential chain.
-
-For example, configure AWS CLI credentials:
+### Install the CLI
 
 ```bash
-aws configure
+pip install -e .
 ```
 
-Verify the configured identity:
+Verify the installation:
 
 ```bash
-aws sts get-caller-identity
+aws-unused --help
 ```
 
-You can also use a named AWS CLI profile:
+Check the version:
 
 ```bash
-python cli.py scan --profile my-profile
+aws-unused --version
 ```
 
 ## Usage
 
-### Scan the entire account
+### Scan All Supported Services
 
 ```bash
-python cli.py scan
+aws-unused scan
 ```
 
-The default output file is:
+Generates:
 
 ```text
 unused_resources.xlsx
 ```
 
-### Scan a specific service
+### Scan a Specific Service
 
 ```bash
-python cli.py scan --service ec2
+aws-unused scan --service ec2
 ```
-
-Available services:
-
-```text
-ec2
-ebs
-elastic-ip
-ami
-rds
-elbv2
-efs
-s3
-```
-
-### Specify an output filename
 
 ```bash
-python cli.py scan --output aws-unused-report.xlsx
+aws-unused scan --service ebs
 ```
-
-### Specify AWS region
 
 ```bash
-python cli.py scan --region ap-south-1
+aws-unused scan --service rds
 ```
-
-### Use a specific AWS profile
 
 ```bash
-python cli.py scan --profile my-profile
+aws-unused scan --service ami
 ```
-
-### Change the number of parallel workers
-
-Default:
-
-```text
-6 workers
-```
-
-Example:
 
 ```bash
-python cli.py scan --workers 8
+aws-unused scan --service elastic-ip
 ```
 
-## Excel Report
-
-The generated workbook contains:
-
-```text
-Summary
-EC2
-EBS
-ElasticIP
-AMI
-RDS
-LoadBalancer
-EFS
-S3
-Findings
+```bash
+aws-unused scan --service elbv2
 ```
 
-### Summary
+```bash
+aws-unused scan --service efs
+```
 
-Contains:
+```bash
+aws-unused scan --service s3
+```
 
-* AWS account ID
-* AWS region
-* Report generation time
-* Findings by service
-* Total findings
+### Specify AWS Region
 
-### Service Sheets
+```bash
+aws-unused scan --region ap-south-1
+```
 
-Each service sheet contains:
+### Custom Output File
 
-* Resource ID
-* Resource name
-* Finding
-* Risk
-* Region
-* Resource details
+```bash
+aws-unused scan --output unused-report.xlsx
+```
 
-### Findings
+### Control Parallel Workers
 
-A consolidated view of all detected unused resources.
+Default is 6 workers:
 
-## Risk Levels
+```bash
+aws-unused scan --workers 8
+```
 
-| Risk   | Meaning                                                                  |
-| ------ | ------------------------------------------------------------------------ |
-| High   | Resource may have significant ongoing cost or should be reviewed quickly |
-| Medium | Potentially unused resource requiring review                             |
-| Low    | Lower-impact unused resource                                             |
+### Combine Options
 
-The tool does **not** automatically delete resources based on risk.
+```bash
+aws-unused scan \
+    --service ec2 \
+    --region ap-south-1 \
+    --workers 4 \
+    --output ec2-report.xlsx
+```
 
-## Future Improvements
+## Supported Detectors
 
-Possible future versions may include:
+| Service       | Detection                         |
+| ------------- | --------------------------------- |
+| EC2           | Stopped instances                 |
+| EBS           | Unattached volumes                |
+| Elastic IP    | Unassociated Elastic IPs          |
+| AMI           | Unused account-owned AMIs         |
+| RDS           | Stopped DB instances              |
+| Load Balancer | No registered targets             |
+| EFS           | No client connections for 30 days |
+| S3            | Empty buckets                     |
 
-* Multi-region scanning
-* Cost estimation
-* More unused-resource detectors
-* HTML/CSV/JSON reports
-* Historical reports
-* Cost optimization recommendations
-* Optional cleanup workflow with explicit confirmation
+## Output
+
+The generated Excel report contains:
+
+* Summary
+* Service-specific sheets
+* Consolidated Findings sheet
+
+The tool is **read-only** and does not perform automatic cleanup.
