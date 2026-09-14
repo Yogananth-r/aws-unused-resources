@@ -1,0 +1,1 @@
+from analyzer.findings import FindingsAnalyzer
